@@ -64,11 +64,17 @@ function UI_Library:CreateTab(name)
         function()
             for _, tab in pairs(self.Tabs) do
                 tab.ContentFrame.Visible = false
+                tab.Tab.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
             end
             ContentFrame.Visible = true
+            Tab.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         end
     )
     table.insert(self.Tabs, {Tab = Tab, ContentFrame = ContentFrame})
+    if #self.Tabs == 1 then
+        Tab.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        ContentFrame.Visible = true
+    end
     return ContentFrame
 end
 function UI_Library:CreateCheckbox(parent, text)
