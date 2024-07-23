@@ -1,1 +1,203 @@
-local Drawing_new=Drawing.new local GetService=game.GetService local Vector2_new=Vector2.new local Color3_fromRGB=Color3.fromRGB local Math_max=math.max local Table_insert=table.insert local Wait=task.wait local UserInputService=GetService(game,'UserInputService') local Camera=workspace.CurrentCamera local CamX=Camera.ViewportSize.X local MenuWidth=Math_max(CamX/18,120) local CreateDrawing=function(type,properties,add)local drawing=Drawing_new(type)if properties then for index,value in pairs(properties)do drawing[index]=value end end if add then for _,value in pairs(add)do Table_insert(value,drawing)end end return drawing end local Library={Inputs={Up={},Down={},Right={},Left={},Return={},Backspace={}},HeldDown={Up=false,Down=false},TabInfo={Active=false,Amount=0,Selected=1,Tabs={}},Active=true,AllDrawings={}} local Watermark=CreateDrawing('Text',{Text='Your Watermark',Position=Vector2_new(CamX/2,0),Center=true,Visible=true,Size=40,ZIndex=99999999,Outline=true,Color=Color3_fromRGB(1,0,0)},{Library.AllDrawings}) function Library:dInput(key,func)Table_insert(self.Inputs[key],func)end function Library:Unload()for _,drawing in pairs(self.AllDrawings)do drawing:Remove()end self.MainConnection:Disconnect()self.InputEnded:Disconnect()self=nil end function Library:Toggle(boolean)boolean=boolean==nil and not self.Active or boolean self.Active=boolean Watermark.Visible=boolean for _,tab in pairs(self.TabInfo.Tabs)do for _,drawing in pairs(tab.Drawings)do drawing.Visible=boolean end end end function Library:AddTab(text)local hovered=false if self.TabInfo.Amount==0 then hovered=true end self.TabInfo.Amount=self.TabInfo.Amount+1 local Tab={Hovered=false,Opened=false,Selected=1,Drawings={},Options={Amount=0,Stored={}}} Tab.Drawings.Base=CreateDrawing('Square',{Visible=true,Color=Color3_fromRGB(0,0,0),Transparency=0.5,Filled=true,Position=Vector2_new(0,40+(self.TabInfo.Amount*15)),Size=Vector2_new(MenuWidth,15)},{self.AllDrawings}) Tab.Drawings.Text=CreateDrawing('Text',{Visible=true,Color=Color3_fromRGB(255,255,255),Font=2,Position=Tab.Drawings.Base.Position,Size=14,Text=text},{self.AllDrawings}) Tab.Drawings.Arrow=CreateDrawing('Text',{Visible=true,Color=Color3_fromRGB(255,255,255),Text='<',Font=2,Position=Tab.Drawings.Base.Position+Vector2_new(MenuWidth-10,0),Size=14},{self.AllDrawings}) function Tab:hovered_(boolean)self.Hovered=boolean==nil and not self.Hovered or boolean Tab.Drawings.Base.Color=self.Hovered and Color3_fromRGB(255,0,0)or Color3_fromRGB(0,0,0)end function Tab:open()if self.Opened or self.TabInfo.Active then return end self.TabInfo.Active=true self.Opened=true Tab.Drawings.Arrow.Text='>' for _,option in pairs(Tab.Options.Stored)do for _,drawing in pairs(option.Drawings)do drawing.Visible=true end end end function Tab:close()if not self.Opened or not self.TabInfo.Active then return end self.TabInfo.Active=false self.Opened=false Tab.Drawings.Arrow.Text='<' for _,option in pairs(Tab.Options.Stored)do for _,drawing in pairs(option.Drawings)do drawing.Visible=false end end end function Tab:AddButton(name,func)self.Options.Amount=self.Options.Amount+1 local Button={Hovered=false,Drawings={}} Button.Drawings.Base=CreateDrawing('Square',{Visible=false,Transparency=0.5,Filled=true,Position=Tab.Drawings.Base.Position+Vector2_new(MenuWidth+10,self.Options.Amount*15),Size=Vector2_new(MenuWidth,15)},{self.AllDrawings}) Button.Drawings.Text=CreateDrawing('Text',{Visible=false,Color=Color3_fromRGB(255,255,255),Font=2,Position=Button.Drawings.Base.Position,Size=14,Text=name or 'Button'},{self.AllDrawings}) Button.Press=function(boolean)if not Button.Hovered or not Tab.Opened then return end task.spawn(function()Button.Drawings.Text.Color=Color3_fromRGB(79,79,79)task.wait(0.05)Button.Drawings.Text.Color=Color3_fromRGB(255,255,255)end)task.spawn(func)end Library:dInput('Return',Button.Press)if self.Options.Amount==1 then Button.Hovered=true Button.Drawings.Base.Color=Color3_fromRGB(255,0,0)end Table_insert(self.Options.Stored,Button) return Button end Library.MainConnection=UserInputService.InputBegan:Connect(function(key)local name=key.KeyCode.Name local funcs=Library.Inputs[name]if not funcs then return end if name=='Right'or name=='Left'then Library.HeldDown[name]=true for _,func in pairs(funcs)do task.spawn(func)end return end for _,func in pairs(funcs)do task.spawn(func)end end) Library.InputEnded=UserInputService.InputEnded:Connect(function(key)local name=key.KeyCode.Name if name=='Right'or name=='Left'then Library.HeldDown[name]=false end end) Library:dInput('Right',function()if not Library.Active then return end local activeTab=Library.TabInfo.Tabs[Library.TabInfo.Selected]if Library.HeldDown.Right then activeTab:NavDown()end end) Library:dInput('Left',function()if not Library.Active then return end local activeTab=Library.TabInfo.Tabs[Library.TabInfo.Selected]if Library.HeldDown.Left then activeTab:NavUp()end end) Library:dInput('Return',function()if not Library.Active then return end local activeTab=Library.TabInfo.Tabs[Library.TabInfo.Selected]local selectedOption=activeTab.Options.Stored[activeTab.Selected]if selectedOption then selectedOption:Press()end end)
+-- Local aliases for common functions
+local DrawingNew       = Drawing.new
+local GetService        = game.GetService
+local Vector2New        = Vector2.new
+local Color3FromRGB     = Color3.fromRGB
+local TableInsert       = table.insert
+local TaskWait          = task.wait
+local UserInputService  = GetService(game, 'UserInputService')
+
+-- Main library table
+local UI = {
+    Active = true,
+    Tabs = {},
+    AllDrawings = {}
+}
+
+-- Helper function to create drawings
+local function CreateDrawing(type, properties)
+    local drawing = DrawingNew(type)
+    if properties then
+        for key, value in pairs(properties) do
+            drawing[key] = value
+        end
+    end
+    TableInsert(UI.AllDrawings, drawing)
+    return drawing
+end
+
+-- UI Initialization
+local Camera = workspace.CurrentCamera
+local CamX = Camera.ViewportSize.X
+local MenuWidth = math.max(CamX / 18, 120)
+
+local Watermark = CreateDrawing('Text', {
+    Text = 'Custom UI Library',
+    Position = Vector2New(CamX / 2, 0),
+    Center = true,
+    Size = 40,
+    Visible = true,
+    Color = Color3FromRGB(1, 0, 0),
+    ZIndex = 99999999
+})
+
+-- Function to toggle UI visibility
+function UI:Toggle(state)
+    self.Active = state
+    Watermark.Visible = state
+    for _, tab in ipairs(self.Tabs) do
+        for _, drawing in ipairs(tab.Drawings) do
+            drawing.Visible = state
+        end
+    end
+end
+
+-- Create and handle tabs
+function UI:AddTab(name)
+    local tab = {
+        Name = name,
+        Opened = false,
+        Drawings = {},
+        Options = {}
+    }
+
+    -- Create tab UI elements
+    local base = CreateDrawing('Square', {
+        Visible = true,
+        Color = Color3FromRGB(0, 0, 0),
+        Transparency = 0.5,
+        Filled = true,
+        Position = Vector2New(0, #self.Tabs * 30),
+        Size = Vector2New(MenuWidth, 30)
+    })
+
+    local text = CreateDrawing('Text', {
+        Visible = true,
+        Color = Color3FromRGB(255, 255, 255),
+        Font = 2,
+        Position = base.Position,
+        Size = 14,
+        Text = name
+    })
+
+    TableInsert(tab.Drawings, base)
+    TableInsert(tab.Drawings, text)
+
+    -- Add tab to the library
+    TableInsert(self.Tabs, tab)
+    return tab
+end
+
+-- Add button to a tab
+function UI:AddButton(tab, buttonName, callback)
+    local button = {
+        Name = buttonName,
+        Callback = callback,
+        Drawings = {}
+    }
+
+    local base = CreateDrawing('Square', {
+        Visible = false,
+        Transparency = 0.5,
+        Filled = true,
+        Position = Vector2New(0, #tab.Options * 30),
+        Size = Vector2New(MenuWidth, 30)
+    })
+
+    local text = CreateDrawing('Text', {
+        Visible = false,
+        Color = Color3FromRGB(255, 255, 255),
+        Font = 2,
+        Position = base.Position,
+        Size = 14,
+        Text = buttonName
+    })
+
+    TableInsert(button.Drawings, base)
+    TableInsert(button.Drawings, text)
+
+    -- Update tab options
+    TableInsert(tab.Options, button)
+    return button
+end
+
+-- Add toggle to a tab
+function UI:AddToggle(tab, toggleName, defaultState, callback)
+    local toggle = {
+        Name = toggleName,
+        Enabled = defaultState,
+        Callback = callback,
+        Drawings = {}
+    }
+
+    local base = CreateDrawing('Square', {
+        Visible = false,
+        Transparency = 0.5,
+        Filled = true,
+        Position = Vector2New(0, #tab.Options * 30),
+        Size = Vector2New(MenuWidth, 30)
+    })
+
+    local text = CreateDrawing('Text', {
+        Visible = false,
+        Color = Color3FromRGB(255, 255, 255),
+        Font = 2,
+        Position = base.Position,
+        Size = 14,
+        Text = toggleName
+    })
+
+    TableInsert(toggle.Drawings, base)
+    TableInsert(toggle.Drawings, text)
+
+    -- Update tab options
+    TableInsert(tab.Options, toggle)
+    return toggle
+end
+
+-- Add slider to a tab
+function UI:AddSlider(tab, sliderName, minValue, maxValue, defaultValue, callback)
+    local slider = {
+        Name = sliderName,
+        Min = minValue,
+        Max = maxValue,
+        Value = defaultValue,
+        Callback = callback,
+        Drawings = {}
+    }
+
+    local base = CreateDrawing('Square', {
+        Visible = false,
+        Transparency = 0.5,
+        Filled = true,
+        Position = Vector2New(0, #tab.Options * 30),
+        Size = Vector2New(MenuWidth, 30)
+    })
+
+    local text = CreateDrawing('Text', {
+        Visible = false,
+        Color = Color3FromRGB(255, 255, 255),
+        Font = 2,
+        Position = base.Position,
+        Size = 14,
+        Text = sliderName .. ': ' .. defaultValue
+    })
+
+    TableInsert(slider.Drawings, base)
+    TableInsert(slider.Drawings, text)
+
+    -- Update tab options
+    TableInsert(tab.Options, slider)
+    return slider
+end
+
+-- Cleanup function
+function UI:Cleanup()
+    for _, drawing in ipairs(self.AllDrawings) do
+        drawing:Remove()
+    end
+    self.AllDrawings = {}
+    self.Tabs = {}
+end
+
+return UI
